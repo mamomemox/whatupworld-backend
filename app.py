@@ -13,13 +13,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Read the API key directly from environment variables (Render's Environment tab)
+api_key = os.getenv("OPENAI_API_KEY")
+
+# Initialize the OpenAI client correctly
+client = openai.OpenAI(api_key=api_key)
 
 @app.get("/generate")
 async def generate(country: str):
     prompt = f"Give me a market update for Swiss exporters in {country}: latest news, regulations, and export opportunities."
-
-    client = openai.OpenAI(api_key=openai.api_key)
 
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
