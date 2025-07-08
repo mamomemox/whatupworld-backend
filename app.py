@@ -19,7 +19,9 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 async def generate(country: str):
     prompt = f"Give me a market update for Swiss exporters in {country}: latest news, regulations, and export opportunities."
 
-    response = openai.ChatCompletion.create(
+    client = openai.OpenAI(api_key=openai.api_key)
+
+    response = client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": "You are an expert on international trade, writing for Swiss exporters."},
@@ -28,7 +30,7 @@ async def generate(country: str):
         max_tokens=500
     )
 
-    text = response['choices'][0]['message']['content']
+    text = response.choices[0].message.content
 
     return {
         "title": f"Market Update for {country}",
