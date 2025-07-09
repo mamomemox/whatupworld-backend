@@ -13,7 +13,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Set your OpenAI key securely
+# Set OpenAI API key from environment
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 @app.get("/api/generate")
@@ -35,10 +35,16 @@ async def generate(country: str):
         )
         ai_text = response['choices'][0]['message']['content']
 
-        # Optional: Add basic HTML wrapping for Page 2
-        content_html = f"<p>{ai_text.replace('\n', '<br>')}</p>"
+        # Convert to basic HTML with line breaks
+        content_html = f"<p>{ai_text.replace(chr(10), '<br>')}</p>"
 
         return {"content": content_html}
     except Exception as e:
         print("OpenAI error:", e)
         return {"content": "Failed to generate insights."}
+
+
+# 👇 This is essential for Render deployment
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=10000)
