@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import openai
 import os
+from openai import OpenAI, OpenAIError
 
 app = FastAPI()
 
@@ -12,7 +12,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Create OpenAI client correctly
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 @app.get("/api/generate")
 async def generate(country: str):
@@ -27,7 +28,7 @@ async def generate(country: str):
     )
 
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are an expert market analyst."},
@@ -35,8 +36,8 @@ async def generate(country: str):
             ],
             max_tokens=1000
         )
-        ai_text = response['choices'][0]['message']['content']
+        ai_text = response.choices[0].message.content
         return {"content": ai_text.replace('\n', '<br>')}
-    except Exception as e:
-        print("Error:", e)
-        return {"content": "Failed to generate insights."}
+    except OpenAIError as e:
+        print("OpenAI error:", repr(e))
+        return {"content": "Failed to generate insights: " + str(e)}
