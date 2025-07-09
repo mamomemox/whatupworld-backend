@@ -1,10 +1,49 @@
-/* app.py backend (ensure this structure in your response) */
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+import openai
+import os
 
-return {
-  "title": title_text,
-  "lead_text": lead_text,
-  "latest_news": latest_news_text,
-  "regulation_snapshot": regulation_text,
-  "export_opportunities": opportunity_text,
-  "image_url": image_url  # you can use placeholder for now
-}
+app = FastAPI()
+
+# Allow frontend to call backend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Set your OpenAI key securely
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+@app.get("/api/generate")
+async def generate(country: str):
+    prompt = (
+        f"Act as a market intelligence analyst. For {country}, provide structured insights in this format:\n\n"
+        f"(1) Title: A catchy, 1-line market headline relevant to the selected country.\n"
+        f"(2) Lead Text: 3 concise lines summarizing the market opportunity or trend.\n"
+        f"(3) Latest News: 5-6 lines highlighting a key piece of recent business news for this market.\n"
+        f"(4) Regulation Snapshot: 5-6 lines about key regulatory factors or legal updates exporters should know.\n"
+        f"(5) Export Opportunities: 5-6 lines describing specific export or partnership opportunities in this market.\n\n"
+        f"Keep it factual, insightful, and clear. Each section should be well separated for visual display."
+    )
+
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are an expert market analyst."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=800
+        )
+        ai_text = response['choices'][0]['message']['content']
+
+        # Optional: Add basic HTML formatting (this can be improved later)
+        content_html = "<p>" + ai_text.replace('\n', '<br>') + "</p>"
+
+        return {"content": content_html}
+
+    except Exception as e:
+        print("OpenAI error:", e)
+        return {"content": "Failed to generate insights."}
