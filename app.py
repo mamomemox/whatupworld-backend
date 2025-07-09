@@ -1,12 +1,11 @@
-import os
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+import os
 import openai
 
 app = FastAPI()
 
-# Middleware for CORS
+# CORS setup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,33 +14,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load the OpenAI API key from environment variable
-api_key = os.getenv("OPENAI_API_KEY")
+# Load OpenAI API key
+api_key = os.getenv("OPENAI_API_KEY") or "sk-your-real-key-here"
 client = openai.OpenAI(api_key=api_key)
 
-@app.get("/generate")
+@app.get("/api/generate")
 async def generate(country: str):
-    prompt = f"""
-You are an AI market analyst. Generate a structured market report for {country} including:
-
-1. Overview Market: Summarize the current state of the market, economy, and key sectors.
-2. Latest News: Highlight 1-2 top recent developments relevant for exporters.
-3. Export Opportunities: Identify promising export opportunities and sectors.
-
-Be concise, engaging, and informative. Each section should have 3-5 sentences.
-"""
+    prompt = (
+        f"Act as a market intelligence analyst. For {country}, provide:\n"
+        f"(1) A concise market overview,\n"
+        f"(2) The latest business news relevant to {country},\n"
+        f"(3) Export opportunities specific to {country}.\n"
+        f"Each section should be 2-3 informative sentences. Keep it professional and insightful."
+    )
 
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant that generates market insights."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=800,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=600,
             temperature=0.7,
         )
-        content = response.choices[0].message.content.strip()
-        return JSONResponse(content={"text": content})
+        ai_text = response.choices[0].message.content.strip()
+        return {"result": ai_text}
     except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=500)
+        return {"error": str(e)}
