@@ -1,11 +1,14 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import openai
 
+from dotenv import load_dotenv
+load_dotenv()
+
 app = FastAPI()
 
-# CORS setup
+# CORS settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,28 +17,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load OpenAI API key
-api_key = os.getenv("OPENAI_API_KEY") or "sk-your-real-key-here"
-client = openai.OpenAI(api_key=api_key)
+# Set your API key securely
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 @app.get("/api/generate")
-async def generate(country: str):
-    prompt = (
-        f"Act as a market intelligence analyst. For {country}, provide:\n"
-        f"(1) A concise market overview,\n"
-        f"(2) The latest business news relevant to {country},\n"
-        f"(3) Export opportunities specific to {country}.\n"
-        f"Each section should be 2-3 informative sentences. Keep it professional and insightful."
-    )
+async def generate(request: Request):
+    country = request.query_params.get('country', 'Germany')
+
+    prompt = f"""
+Act as a market intelligence analyst. For {country}, provide:
+(1) a concise market overview (2-3 sentences),
+(2) latest business news (2-3 sentences),
+(3) export opportunities (2-3 sentences).
+Be informative, useful, and avoid filler.
+"""
 
     try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",  # You can switch to gpt-4o if you have access
+            messages=[
+                {"role": "system", "content": "You are a helpful market analyst."},
+                {"role": "user", "content": prompt}
+            ],
             max_tokens=600,
             temperature=0.7,
         )
-        ai_text = response.choices[0].message.content.strip()
-        return {"result": ai_text}
-    except Exception as e:
+
+        content = response['choices'][0]['message']['content']
+
+        # Simple splitting — AI text should have 3 clear sections
+        parts = content.split('\n\n')
+        overview = parts[0] if len(parts) > 0 else ""
+        news = parts[1] if len(parts) > 1 else ""
+        opportunities = parts[2] if len(parts) > 2 else ""
+
+        return {
+            "overview": overview.strip(),
+            "news": news.strip(),
+            "opportunities": opportunities.strip()
+        }
+
+    except openai.error.OpenAIError as e:
         return {"error": str(e)}
