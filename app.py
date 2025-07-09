@@ -1,65 +1,37 @@
+# app.py (Backend)
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import openai
+from openai import OpenAI
 import os
 
-# Initialize FastAPI app
 app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# CORS for frontend-backend communication
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+openai_api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=openai_api_key)
 
-# Load your OpenAI API Key from environment variable
-openai.api_key = os.getenv("OPENAI_API_KEY")
+@app.get("/api/generate")
+async def generate(country: str):
+    prompt = (
+        f"Act as a market intelligence analyst. For {country}, provide:\n"
+        "1. Title and lead text about the market\n"
+        "2. Latest business news\n"
+        "3. Regulation snapshot\n"
+        "4. Export opportunity highlight. Keep each section concise."
+    )
 
-# Request model for POST
-class GenerateRequest(BaseModel):
-    country: str
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": prompt}]
+    )
 
-# Route for AI generation
-@app.post("/api/generate")
-async def generate_content(data: GenerateRequest):
-    country = data.country
+    content = response.choices[0].message.content
 
-    prompt = f"""
-Act as a market intelligence analyst. For {country}, provide:
-1. A concise market overview (2-3 sentences).
-2. The latest business news (2-3 sentences).
-3. Export opportunities (2-3 sentences).
-
-Respond in plain text with clear separation between sections using ### as delimiter. No lists.
-"""
-
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",  # or "gpt-4o" if you have access
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant generating market insights."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=800,
-            temperature=0.7,
-        )
-
-        ai_text = response['choices'][0]['message']['content']
-        # Split into sections based on delimiter
-        sections = ai_text.split("###")
-        result = {
-            "title": f"{country} Market Insights",
-            "lead": sections[0].strip() if len(sections) > 0 else "",
-            "latest_news": sections[1].strip() if len(sections) > 1 else "",
-            "regulation": sections[2].strip() if len(sections) > 2 else "",
-            "opportunity": sections[3].strip() if len(sections) > 3 else "",
-        }
-
-        return result
-
-    except openai.error.OpenAIError as e:
-        return {"error": str(e)}
+    # Split content intelligently here if needed
+    return {
+        "title": f"Market Insights for {country}",
+        "lead": content.split('\n')[0],
+        "latest_news": content.split('\n')[1],
+        "regulation": content.split('\n')[2],
+        "opportunity": content.split('\n')[3],
+    }
