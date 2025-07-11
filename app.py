@@ -13,7 +13,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 @app.get("/")
 async def root():
@@ -27,7 +27,7 @@ async def generate(country: str):
     )
 
     try:
-        response = client.chat.completions.create(
+        response = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are an expert market analyst."},
