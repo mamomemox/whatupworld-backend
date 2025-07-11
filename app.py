@@ -23,7 +23,7 @@ async def generate(country: str):
         f"(3) Latest News: 5-6 lines highlighting a key piece of recent business news for this market.\n"
         f"(4) Regulation Snapshot: 5-6 lines about key regulatory factors or legal updates exporters should know.\n"
         f"(5) Export Opportunities: 5-6 lines describing specific export or partnership opportunities in this market.\n\n"
-        f"Keep it factual, insightful, and clear."
+        f"Keep it factual, insightful, and clear. Each section should be well separated for visual display."
     )
 
     try:
@@ -35,8 +35,8 @@ async def generate(country: str):
             ],
             max_tokens=1000
         )
-        content = response['choices'][0]['message']['content']
-        return {"content": content}
+        ai_text = response['choices'][0]['message']['content']
+        return {"content": ai_text.replace('\n', '<br>')}
     except Exception as e:
-        print(f"Backend Error: {e}")
+        print("Error:", e)
         return {"content": "Failed to generate insights."}
