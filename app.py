@@ -1,11 +1,10 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import openai
 import os
+from openai import OpenAI, OpenAIError
 
 app = FastAPI()
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -13,61 +12,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Your OpenAI key
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Create OpenAI client correctly
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 @app.get("/api/generate")
 async def generate(country: str):
     prompt = (
-        f"Act as a market intelligence analyst. For {country}, provide the following sections:\n\n"
-        f"Title:\nA short catchy headline about the market.\n\n"
-        f"Lead:\nA 1-2 sentence overview of current market trends.\n\n"
-        f"Latest News:\nA brief 2-3 sentence summary of the latest relevant business news.\n\n"
-        f"Regulation Snapshot:\nKey compliance or regulatory updates in 2-3 sentences.\n\n"
-        f"Opportunity Highlight:\nOne high-potential export opportunity described in 2-3 sentences."
+        f"Act as a market intelligence analyst. For {country}, provide structured insights in this format:\n\n"
+        f"(1) Title: A catchy, 1-line market headline relevant to the selected country.\n"
+        f"(2) Lead Text: 3 concise lines summarizing the market opportunity or trend.\n"
+        f"(3) Latest News: 5-6 lines highlighting a key piece of recent business news for this market.\n"
+        f"(4) Regulation Snapshot: 5-6 lines about key regulatory factors or legal updates exporters should know.\n"
+        f"(5) Export Opportunities: 5-6 lines describing specific export or partnership opportunities in this market.\n\n"
+        f"Keep it factual, insightful, and clear. Each section should be well separated for visual display."
     )
 
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a professional market analyst generating concise business reports."},
+                {"role": "system", "content": "You are an expert market analyst."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=800
+            max_tokens=1000
         )
-
-        ai_text = response['choices'][0]['message']['content']
-
-        # Parse the AI response into sections (very basic split based on labels)
-        sections = {
-            "title": "",
-            "lead": "",
-            "news": "",
-            "regulation": "",
-            "opportunity": ""
-        }
-
-        for line in ai_text.split('\n'):
-            if line.lower().startswith('title:'):
-                sections['title'] = line[6:].strip()
-            elif line.lower().startswith('lead:'):
-                sections['lead'] = line[5:].strip()
-            elif line.lower().startswith('latest news:'):
-                sections['news'] = line[12:].strip()
-            elif line.lower().startswith('regulation snapshot:'):
-                sections['regulation'] = line[20:].strip()
-            elif line.lower().startswith('opportunity highlight:'):
-                sections['opportunity'] = line[22:].strip()
-
-        return sections
-
-    except Exception as e:
-        print("OpenAI error:", e)
-        return {
-            "title": "Error",
-            "lead": "Failed to generate insights.",
-            "news": "",
-            "regulation": "",
-            "opportunity": ""
-        }
+        ai_text = response.choices[0].message.content
+        return {"content": ai_text.replace('\n', '<br>')}
+    except OpenAIError as e:
+        print("OpenAI error:", repr(e))
+        return {"content": "Failed to generate insights: " + str(e)}
