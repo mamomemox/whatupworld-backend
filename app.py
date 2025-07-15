@@ -17,7 +17,7 @@ app.add_middleware(
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# n8n Webhook URL - Replace with your actual n8n webhook URL
+# n8n Webhook URL
 N8N_WEBHOOK_URL = "https://primary-production-77f62.up.railway.app/webhook-test/country-report"
 
 @app.get("/")
@@ -27,7 +27,7 @@ async def root():
 @app.get("/api/generate")
 async def generate(country: str):
     try:
-        # First, try to call n8n workflow
+        # Call n8n workflow
         async with httpx.AsyncClient() as client:
             try:
                 n8n_response = await client.post(
@@ -37,14 +37,11 @@ async def generate(country: str):
                 )
                 
                 if n8n_response.status_code == 200:
-                    # n8n returned successfully
                     n8n_data = n8n_response.text
                     
-                    # Check if it's HTML content
                     if n8n_data.strip().startswith('<!DOCTYPE html') or n8n_data.strip().startswith('<html'):
                         return {"html": n8n_data}
                     else:
-                        # If not HTML, treat as JSON or text
                         try:
                             import json
                             json_data = json.loads(n8n_data)
@@ -60,9 +57,7 @@ async def generate(country: str):
             except Exception as e:
                 print(f"n8n webhook error: {e}")
         
-        # Fallback to OpenAI if n8n fails
-        print(f"Falling back to OpenAI for country: {country}")
-        
+        # Fallback to OpenAI
         prompt = (
             f"Act as a market intelligence analyst. Create a comprehensive report for {country} with the following structure:\n\n"
             f"🌍 **Market Report: {country}**\n\n"
@@ -93,7 +88,6 @@ async def generate(country: str):
         
         ai_text = response.choices[0].message.content
         
-        # Convert markdown-style formatting to HTML
         formatted_content = ai_text.replace('\n\n', '</p><p>')
         formatted_content = formatted_content.replace('**', '<strong>').replace('**', '</strong>')
         formatted_content = formatted_content.replace('## ', '<h2>').replace('\n', '</h2><p>')
