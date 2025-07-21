@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import openai
@@ -6,12 +6,6 @@ from openai import OpenAIError
 import httpx
 import asyncio
 import json
-import traceback
-import logging
-
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -23,141 +17,135 @@ app.add_middleware(
 )
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
-N8N_WEBHOOK_URL = "https://primary-production-77f62.up.railway.app/webhook-test/country-report"
+
+# n8n Webhook URL - PRODUCTION
+N8N_WEBHOOK_URL = "https://primary-production-77f62.up.railway.app/webhook/country-report"
 
 @app.get("/")
 async def root():
-    return {
-        "status": "API is running", 
-        "webhook": N8N_WEBHOOK_URL,
-        "openai_key": "***" + str(openai.api_key)[-4:] if openai.api_key else "MISSING"
-    }
+    return {"status": "API is running"}
 
 @app.get("/api/generate")
 async def generate(country: str):
-    logger.info(f"🚀 === REQUEST START: {country} ===")
-    
-    # Always return success for debugging
     try:
+        # Call n8n workflow
         async with httpx.AsyncClient() as client:
-            logger.info(f"📤 Calling n8n: {N8N_WEBHOOK_URL}")
-            logger.info(f"📤 Payload: {{'country': '{country}'}}")
-            
             try:
-                response = await client.post(
+                n8n_response = await client.post(
                     N8N_WEBHOOK_URL,
                     json={"country": country},
-                    timeout=60.0,
-                    headers={
-                        "Content-Type": "application/json",
-                        "User-Agent": "FastAPI-Backend/1.0"
-                    }
+                    timeout=60.0
                 )
                 
-                logger.info(f"📊 n8n Status: {response.status_code}")
-                logger.info(f"📋 n8n Headers: {dict(response.headers)}")
-                
-                if response.status_code == 200:
-                    response_text = response.text
-                    logger.info(f"✅ n8n Response Length: {len(response_text)} chars")
-                    logger.info(f"🔍 Response preview: {response_text[:100]}...")
+                if n8n_response.status_code == 200:
+                    n8n_data = n8n_response.text
                     
-                    # Debug HTML content
-                    debug_html = f"""
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta charset="UTF-8">
-                        <title>Debug Report - {country}</title>
-                        <style>
-                            body {{ font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }}
-                            .debug {{ background: #f0f8ff; padding: 15px; border-radius: 5px; margin: 10px 0; }}
-                            .success {{ background: #d4edda; padding: 15px; border-radius: 5px; margin: 10px 0; }}
-                            .content {{ background: #fff; border: 1px solid #ddd; padding: 20px; border-radius: 5px; max-height: 500px; overflow: auto; }}
-                            pre {{ background: #f8f9fa; padding: 10px; border-radius: 3px; overflow: auto; font-size: 12px; }}
-                        </style>
-                    </head>
-                    <body>
-                        <h1>🎉 SUCCESS! Backend → n8n Connection Working</h1>
-                        
-                        <div class="success">
-                            <h3>✅ Connection Details:</h3>
-                            <strong>Country:</strong> {country}<br>
-                            <strong>n8n URL:</strong> {N8N_WEBHOOK_URL}<br>
-                            <strong>Status Code:</strong> {response.status_code}<br>
-                            <strong>Response Length:</strong> {len(response_text)} characters<br>
-                            <strong>Content-Type:</strong> {response.headers.get('content-type', 'unknown')}
-                        </div>
-                        
-                        <div class="debug">
-                            <h3>🔍 n8n Raw Response (first 1000 chars):</h3>
-                            <pre>{response_text[:1000]}</pre>
-                        </div>
-                        
-                        <div class="content">
-                            <h3>📄 Actual n8n Content:</h3>
-                            {response_text if response_text.startswith('<!DOCTYPE html') or response_text.startswith('<html') else f'<pre>{response_text}</pre>'}
-                        </div>
-                        
-                        <div class="debug">
-                            <h3>🛠️ Technical Info:</h3>
-                            <strong>Backend Status:</strong> ✅ Working<br>
-                            <strong>n8n Communication:</strong> ✅ Working<br>
-                            <strong>Response Processing:</strong> ✅ Working<br>
-                            <strong>Issue:</strong> None detected - everything working!
-                        </div>
-                    </body>
-                    </html>
-                    """
+                    # Check if it's HTML
+                    if n8n_data.strip().startswith('<!DOCTYPE html') or n8n_data.strip().startswith('<html'):
+                        return {"html": n8n_data}
                     
-                    logger.info("🎯 Returning debug HTML to frontend")
-                    return {"html": debug_html}
-                
-                else:
-                    error_text = response.text
-                    logger.error(f"❌ n8n Error {response.status_code}: {error_text}")
-                    
-                    error_html = f"""
-                    <div style="max-width: 800px; margin: 0 auto; padding: 20px; font-family: Arial;">
-                        <h1 style="color: red;">❌ n8n Error {response.status_code}</h1>
-                        <div style="background: #fee; padding: 15px; border-radius: 5px;">
-                            <p><strong>URL:</strong> {N8N_WEBHOOK_URL}</p>
-                            <p><strong>Country:</strong> {country}</p>
-                            <p><strong>Error:</strong></p>
-                            <pre>{error_text}</pre>
+                    # Try to parse as JSON
+                    try:
+                        json_data = json.loads(n8n_data)
+                        if "html" in json_data:
+                            return {"html": json_data["html"]}
+                        else:
+                            # Format JSON response nicely
+                            formatted_html = f"""
+                            <div class="max-w-4xl mx-auto p-6">
+                                <div class="bg-white rounded-lg shadow-lg p-8">
+                                    <h1 class="text-2xl font-bold mb-6 text-center">📊 Market Data: {country}</h1>
+                                    <div class="bg-blue-50 p-6 rounded-lg">
+                                        <h3 class="font-bold text-lg mb-3">Response from n8n:</h3>
+                                        <pre class="bg-white p-4 rounded border text-sm overflow-auto">{json.dumps(json_data, indent=2, ensure_ascii=False)}</pre>
+                                    </div>
+                                </div>
+                            </div>
+                            """
+                            return {"html": formatted_html}
+                            
+                    except json.JSONDecodeError:
+                        # Plain text response
+                        formatted_html = f"""
+                        <div class="max-w-4xl mx-auto p-6">
+                            <div class="bg-white rounded-lg shadow-lg p-8">
+                                <h1 class="text-2xl font-bold mb-6 text-center">📊 Market Data: {country}</h1>
+                                <div class="bg-yellow-50 p-6 rounded-lg border-l-4 border-yellow-500">
+                                    <h3 class="font-bold text-lg mb-3">Raw Response from n8n:</h3>
+                                    <pre class="bg-white p-4 rounded border text-sm overflow-auto">{n8n_data}</pre>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    """
-                    return {"html": error_html}
+                        """
+                        return {"html": formatted_html}
                 
             except httpx.TimeoutException:
-                logger.error("⏰ n8n Timeout")
-                return {"html": "<div style='padding: 20px;'><h1>⏰ Timeout Error</h1><p>n8n took too long to respond</p></div>"}
-                
+                print(f"n8n webhook timeout for country: {country}")
             except Exception as e:
-                logger.error(f"💥 HTTP Error: {e}")
-                return {"html": f"<div style='padding: 20px;'><h1>💥 HTTP Error</h1><p>{str(e)}</p></div>"}
-    
-    except Exception as e:
-        logger.error(f"🚨 Critical Error: {e}")
-        logger.error(f"🚨 Traceback: {traceback.format_exc()}")
+                print(f"n8n webhook error: {e}")
         
-        return {"html": f"""
-        <div style="padding: 20px; font-family: Arial;">
-            <h1 style="color: red;">🚨 Critical Backend Error</h1>
-            <p><strong>Error:</strong> {str(e)}</p>
-            <p><strong>Country:</strong> {country}</p>
-            <details>
-                <summary>Technical Details</summary>
-                <pre>{traceback.format_exc()}</pre>
-            </details>
-        </div>
-        """}
+        # Fallback to OpenAI
+        print(f"Using OpenAI fallback for country: {country}")
+        
+        prompt = (
+            f"Act as a market intelligence analyst. Create a comprehensive report for {country} with the following structure:\n\n"
+            f"🌍 **Market Report: {country}**\n\n"
+            f"## 📊 Executive Summary\n"
+            f"[2-3 key insights about the market]\n\n"
+            f"## 💰 Key Economic Indicators\n"
+            f"[GDP, inflation, unemployment, etc.]\n\n"
+            f"## 🏭 Industry Analysis\n"
+            f"[Main sectors and growth opportunities]\n\n"
+            f"## 📈 Market Trends\n"
+            f"[Current trends and future outlook]\n\n"
+            f"## 🌐 Trade & Export Opportunities\n"
+            f"[Key trading partners and export potential]\n\n"
+            f"## 🔮 Recommendations\n"
+            f"[Strategic recommendations for businesses]\n\n"
+            f"Please provide specific data, statistics, and actionable insights."
+        )
 
-@app.get("/test")
-async def test():
-    return {"message": "Backend is working", "webhook": N8N_WEBHOOK_URL}
+        response = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are an expert market analyst with deep knowledge of global markets, trade, and economic trends."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=1500,
+            temperature=0.7
+        )
+        
+        ai_text = response.choices[0].message.content
+        
+        # Better HTML formatting
+        formatted_content = ai_text.replace('\n\n', '</p><p>')
+        formatted_content = formatted_content.replace('**', '<strong>').replace('**', '</strong>')
+        formatted_content = formatted_content.replace('## ', '<h2 class="text-xl font-bold mt-6 mb-3 text-[#181111]">')
+        formatted_content = formatted_content.replace('\n', '</h2><p class="mb-4 text-[#181111] leading-relaxed">')
+        
+        final_html = f"""
+        <div class="max-w-4xl mx-auto p-6">
+            <div class="bg-white rounded-lg shadow-lg p-8">
+                <h1 class="text-[#181111] text-2xl font-bold mb-6 text-center">
+                    📊 Market Insights: {country}
+                </h1>
+                <div class="text-[#181111] text-base leading-relaxed">
+                    <div class="bg-orange-50 p-4 rounded-lg mb-6 border-l-4 border-orange-500">
+                        <p class="text-sm">⚠️ <strong>Fallback Mode:</strong> Generated by OpenAI (n8n not available)</p>
+                    </div>
+                    <p class="mb-4">{formatted_content}</p>
+                </div>
+            </div>
+        </div>
+        """
+        
+        return {"html": final_html}
+        
+    except OpenAIError as e:
+        raise HTTPException(status_code=500, detail=f"OpenAI API error: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 @app.get("/health")
-async def health():
-    return {"status": "healthy"}
+async def health_check():
+    return {"status": "healthy", "n8n_url": N8N_WEBHOOK_URL}
