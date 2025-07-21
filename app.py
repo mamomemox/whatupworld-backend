@@ -18,7 +18,7 @@ app.add_middleware(
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # n8n Webhook URL
-N8N_WEBHOOK_URL = "https://primary-production-77f62.up.railway.app/webhook-test/country-report"
+N8N_WEBHOOK_URL = "https://primary-production-77f62.up.railway.app/webhook/country-report"
 
 @app.get("/")
 async def root():
