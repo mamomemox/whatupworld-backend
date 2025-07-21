@@ -17,8 +17,6 @@ app.add_middleware(
 )
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
-
-# n8n Webhook URL - PRODUCTION
 N8N_WEBHOOK_URL = "https://primary-production-77f62.up.railway.app/webhook/country-report"
 
 @app.get("/")
@@ -50,14 +48,18 @@ async def generate(country: str):
                         if "html" in json_data:
                             return {"html": json_data["html"]}
                         else:
-                            # Format JSON response nicely
+                            # Format with Tailwind
                             formatted_html = f"""
                             <div class="max-w-4xl mx-auto p-6">
                                 <div class="bg-white rounded-lg shadow-lg p-8">
-                                    <h1 class="text-2xl font-bold mb-6 text-center">📊 Market Data: {country}</h1>
-                                    <div class="bg-blue-50 p-6 rounded-lg">
-                                        <h3 class="font-bold text-lg mb-3">Response from n8n:</h3>
-                                        <pre class="bg-white p-4 rounded border text-sm overflow-auto">{json.dumps(json_data, indent=2, ensure_ascii=False)}</pre>
+                                    <h1 class="text-[#181111] text-2xl font-bold mb-6 text-center">
+                                        📊 Market Insights: {country}
+                                    </h1>
+                                    <div class="text-[#181111] text-base leading-relaxed">
+                                        <div class="bg-blue-50 p-6 rounded-lg border-l-4 border-blue-500">
+                                            <h3 class="font-bold text-lg mb-3">Data from n8n:</h3>
+                                            <pre class="bg-white p-4 rounded border text-sm overflow-auto">{json.dumps(json_data, indent=2, ensure_ascii=False)}</pre>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -65,14 +67,18 @@ async def generate(country: str):
                             return {"html": formatted_html}
                             
                     except json.JSONDecodeError:
-                        # Plain text response
+                        # Format with Tailwind
                         formatted_html = f"""
                         <div class="max-w-4xl mx-auto p-6">
                             <div class="bg-white rounded-lg shadow-lg p-8">
-                                <h1 class="text-2xl font-bold mb-6 text-center">📊 Market Data: {country}</h1>
-                                <div class="bg-yellow-50 p-6 rounded-lg border-l-4 border-yellow-500">
-                                    <h3 class="font-bold text-lg mb-3">Raw Response from n8n:</h3>
-                                    <pre class="bg-white p-4 rounded border text-sm overflow-auto">{n8n_data}</pre>
+                                <h1 class="text-[#181111] text-2xl font-bold mb-6 text-center">
+                                    📊 Market Data: {country}
+                                </h1>
+                                <div class="text-[#181111] text-base leading-relaxed">
+                                    <div class="bg-yellow-50 p-6 rounded-lg border-l-4 border-yellow-500">
+                                        <h3 class="font-bold text-lg mb-3">Raw Response from n8n:</h3>
+                                        <pre class="bg-white p-4 rounded border text-sm overflow-auto">{n8n_data[:2000]}...</pre>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -80,45 +86,27 @@ async def generate(country: str):
                         return {"html": formatted_html}
                 
             except httpx.TimeoutException:
-                print(f"n8n webhook timeout for country: {country}")
+                pass
             except Exception as e:
-                print(f"n8n webhook error: {e}")
+                print(f"n8n error: {e}")
         
-        # Fallback to OpenAI
-        print(f"Using OpenAI fallback for country: {country}")
-        
-        prompt = (
-            f"Act as a market intelligence analyst. Create a comprehensive report for {country} with the following structure:\n\n"
-            f"🌍 **Market Report: {country}**\n\n"
-            f"## 📊 Executive Summary\n"
-            f"[2-3 key insights about the market]\n\n"
-            f"## 💰 Key Economic Indicators\n"
-            f"[GDP, inflation, unemployment, etc.]\n\n"
-            f"## 🏭 Industry Analysis\n"
-            f"[Main sectors and growth opportunities]\n\n"
-            f"## 📈 Market Trends\n"
-            f"[Current trends and future outlook]\n\n"
-            f"## 🌐 Trade & Export Opportunities\n"
-            f"[Key trading partners and export potential]\n\n"
-            f"## 🔮 Recommendations\n"
-            f"[Strategic recommendations for businesses]\n\n"
-            f"Please provide specific data, statistics, and actionable insights."
-        )
+        # OpenAI Fallback with Tailwind Design
+        prompt = f"Create a comprehensive market report for {country}. Include economic indicators, trade data, and business opportunities."
 
         response = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are an expert market analyst with deep knowledge of global markets, trade, and economic trends."},
+                {"role": "system", "content": "You are an expert market analyst."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=1500,
+            max_tokens=1000,
             temperature=0.7
         )
         
         ai_text = response.choices[0].message.content
         
-        # Better HTML formatting
-        formatted_content = ai_text.replace('\n\n', '</p><p>')
+        # Format with proper Tailwind styling
+        formatted_content = ai_text.replace('\n\n', '</p><p class="mb-4">')
         formatted_content = formatted_content.replace('**', '<strong>').replace('**', '</strong>')
         formatted_content = formatted_content.replace('## ', '<h2 class="text-xl font-bold mt-6 mb-3 text-[#181111]">')
         formatted_content = formatted_content.replace('\n', '</h2><p class="mb-4 text-[#181111] leading-relaxed">')
@@ -133,7 +121,9 @@ async def generate(country: str):
                     <div class="bg-orange-50 p-4 rounded-lg mb-6 border-l-4 border-orange-500">
                         <p class="text-sm">⚠️ <strong>Fallback Mode:</strong> Generated by OpenAI (n8n not available)</p>
                     </div>
-                    <p class="mb-4">{formatted_content}</p>
+                    <div class="prose max-w-none">
+                        <p class="mb-4">{formatted_content}</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -141,10 +131,8 @@ async def generate(country: str):
         
         return {"html": final_html}
         
-    except OpenAIError as e:
-        raise HTTPException(status_code=500, detail=f"OpenAI API error: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
 async def health_check():
